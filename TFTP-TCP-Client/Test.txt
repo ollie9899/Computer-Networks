@@ -1,0 +1,340 @@
+hellloooooinfoworld
+ 
+UNITED KINGDOM 
+SOFTWARE DEVELOPMENT CLOUD COMPUTING MACHINE LEARNING ANALYTICS WHITE PAPERS/WEBCASTS
+ 
+  
+HTTP/2: A jump-start for Java developers
+RELATED STORIES
+How to work with Sockets in C#
+Hands on: Build a Storm analytics solution
+Love and hate for Java 8
+Home Software Development Java
+Socket programming in Java: A tutorial
+From simple I/O to non-blocking asynchronous channels in the Java socket model
+Share on Facebook Share on Twitter Share on LinkedIn Share on Reddit Share by Email Print resource
+Steven HainesBy Steven Haines
+Contributor, JavaWorld | 8 JANUARY 2020 22:22 GMT
+
+
+jw scalable sockets networks
+Stephen D. Strowes (CC BY-SA 2.0)
+
+
+
+This tutorial is an introduction to socket programming in Java, starting with a simple client-server example demonstrating the basic features of Java I/O.  You'll be introduced to both the original java.io package and NIO, the non-blocking I/O (java.nio) APIs introduced in Java 1.4. Finally, you'll see an example that demonstrates Java networking as implemented from Java 7 forward, in NIO.2.
+Socket programming boils down to two systems communicating with one another. Generally, network communication comes in two flavors: Transport Control Protocol (TCP) and User Datagram Protocol (UDP). TCP and UDP are used for different purposes and both have unique constraints:
+
+TCP is relatively simple and reliable protocol that enables a client to make a connection to a server and the two systems to communicate. In TCP, each entity knows that its communication payloads have been received.
+UDP is a connectionless protocol and is good for scenarios where you do not necessarily need every packet to arrive at its destination, such as media streaming.
+To appreciate the difference between TCP and UDP, consider what would happen if you were streaming video from your favorite website and it dropped frames. Would you prefer that the client slow down your movie to receive the missing frames or would you prefer that the video continue playing? Video streaming protocols typically leverage UDP. Because TCP guarantees delivery, it is the protocol of choice for HTTP, FTP, SMTP, POP3, and so forth.
+
+In this tutorial, I introduce you to socket programming in Java. I present a series of client-server examples that demonstrate features from the original Java I/O framework, then gradually advance to using features introduced in NIO.2.
+
+Old-school Java sockets
+In implementations prior to NIO, Java TCP client socket code is handled by the java.net.Socket class. The following code opens a connection to a server:
+
+
+	Socket socket = new Socket( server, port );
+Once our socket instance is connected to the server we can start obtaining input and output streams to the sever. Input streams are used to read data from the server while output streams are used to write data to the server. We can execute the following methods to obtain input and output streams:
+
+	InputStream in = socket.getInputStream();
+	OutputStream out = socket.getOutputStream();
+Because these are ordinary streams, the same streams that we would use to read from and write to a file, we can convert them to the form that best serves our use case. For example, we could wrap the OutputStream with a PrintStream so that we can easily write text with methods like println(). For another example, we could wrap the InputStream with a BufferedReader, via an InputStreamReader, in order to easily read text with methods like readLine().
+
+download
+Download the source code
+Source code for "Socket programming in Java: A tutorial." Created by Steven Haines for JavaWorld.
+Java socket client example
+Let's work through a short example that executes an HTTP GET against an HTTP server. HTTP is more sophisticated than our example permits, but we can write client code to handle the simplest case: request a resource from the server and the server returns the response and closes the stream. This case requires the following steps:
+
+Create a socket to the web server listening on port 80.
+Obtain a PrintStream to the server and send the request GET PATH HTTP/1.0, where PATH is the requested resource on the server. For example, if we wanted to open the root of a web site then the path would be /.
+Obtain an InputStream to the server, wrap it with a BufferedReader and read the response line-by-line.
+Listing 1 shows the source code for this example.
+
+Customer experience: Why it is the perfect time to rethink strategy
+SponsoredPost Sponsored by Adobe
+
+Customer experience: Why it is the perfect time to rethink strategy
+
+Disruption driven by evolving digital technology will remain a key business challenge this year and reshape customer expectations.
+
+Listing 1. SimpleSocketClientExample.java
+package com.geekcap.javaworld.simplesocketclient;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.PrintStream;
+import java.net.Socket;
+
+public class SimpleSocketClientExample
+{
+    public static void main( String[] args )
+    {
+        if( args.length < 2 )
+        {
+            System.out.println( "Usage: SimpleSocketClientExample <server> <path>" );
+            System.exit( 0 );
+        }
+        String server = args[ 0 ];
+        String path = args[ 1 ];
+
+        System.out.println( "Loading contents of URL: " + server );
+
+        try
+        {
+            // Connect to the server
+            Socket socket = new Socket( server, 80 );
+
+            // Create input and output streams to read from and write to the server
+            PrintStream out = new PrintStream( socket.getOutputStream() );
+            BufferedReader in = new BufferedReader( new InputStreamReader( socket.getInputStream() ) );
+
+            // Follow the HTTP protocol of GET <path> HTTP/1.0 followed by an empty line
+            out.println( "GET " + path + " HTTP/1.0" );
+            out.println();
+
+            // Read data from the server until we finish reading the document
+            String line = in.readLine();
+            while( line != null )
+            {
+                System.out.println( line );
+                line = in.readLine();
+            }
+
+            // Close our streams
+            in.close();
+            out.close();
+            socket.close();
+        }
+        catch( Exception e )
+        {
+            e.printStackTrace();
+        }
+    }
+}
+Listing 1 accepts two command-line arguments: the server to connect to (assuming that we're connecting to the server on port 80) and the resource to retrieve. It creates a Socket that points to the server and explicitly specifies port 80. It then executes the command:
+
+GET PATH HTTP/1.0
+For example:
+
+GET / HTTP/1.0
+What just happened?
+When you retrieve a web page from a web server, such as www.google.com, the HTTP client uses DNS servers to find the server's address: it starts by asking the top-level domain server for the com domain where the authoritative domain-name server is for the www.google.com. Then it asks that domain-name server for the IP address (or addresses) for www.google.com. Next, it opens a socket to that server on port 80. (Or, if you want to define a different port, you can do so by adding a colon followed by the port number, for example: :8080.) Finally, the HTTP client executes the specified HTTP method, such as GET, POST, PUT, DELETE, HEAD, or OPTI/ONS. Each method has its own syntax. As shown in the above code snips, the GET method requires a path followed by HTTP/version number and an empty line. If we wanted to add HTTP headers we could have done so before entering the new line.
+
+In Listing 1, we retrieved an OutputStream and wrapped it in a PrintStream so that we could more easily execute our text-based commands. Our code obtained an InputStream, wrapped that in an InputStreamReader, which converted it to a Reader, and then wrapped that in a BufferedReader. We used the PrintStream to execute our GET method and then used the BufferedReader to read the response line-by-line until we received a null response, indicating that the socket had been closed.
+
+What are cloud-native applications and how can they help CIOs?
+SponsoredPost Sponsored by Dell
+
+What are cloud-native applications and how can they help CIOs?
+
+If your organisation requires solutions that empower IT and business to move faster, cloud-native could be the answer
+
+Now execute this class and pass it the following arguments:
+
+java com.geekcap.javaworld.simplesocketclient.SimpleSocketClientExample www.javaworld.com /
+You should see output similar to what's below:
+
+Loading contents of URL: www.javaworld.com
+HTTP/1.1 200 OK
+Date: Sun, 21 Sep 2014 22:20:13 GMT
+Server: Apache
+X-Gas_TTL: 10
+Cache-Control: max-age=10
+X-GasHost: gas2.usw
+X-Cooking-With: Gasoline-Local
+X-Gasoline-Age: 8
+Content-Length: 168
+Last-Modified: Tue, 24 Jan 2012 00:09:09 GMT
+Etag: "60001b-a8-4b73af4bf3340"
+Content-Type: text/html
+Vary: Accept-Encoding
+Connection: close
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<title>Gasoline Test Page</title>
+</head>
+<body>
+<br><br>
+<center>Success</center>
+</body>
+</html>
+This output shows a test page on JavaWorld's website. It replied back that it speaks HTTP version 1.1 and the response is 200 OK.
+
+Java socket server example
+We've covered the client side and fortunately the communication aspect of the server side is just as easy. From a simplistic perspective, the process is as follows:
+
+Create a ServerSocket, specifying a port to listen on.
+Invoke the ServerSocket's accept() method to listen on the configured port for a client connection.
+When a client connects to the server, the accept() method returns a Socket through which the server can communicate with the client. This is the same Socket class that we used for our client, so the process is the same: obtain an InputStream to read from the client and an OutputStream write to the client.
+If you server needs to be scalable, you will want to pass the Socket to another thread to process so that your server can continue listening for additional connections.
+Call the ServerSocket's accept() method again to listen for another connection.
+As you'll soon see, NIO's handling of this scenario would be a bit different. For now, though, we can directly create a ServerSocket by passing it a port to listen on (more about ServerSocketFactorys in the next section):
+
+	ServerSocket serverSocket = new ServerSocket( port );
+And now we can accept incoming connections via the accept() method:
+
+	Socket socket = serverSocket.accept();
+	// Handle the connection ...
+Multithreaded programming with Java sockets
+Listing 2, below, puts all of the server code so far together into a slightly more robust example that uses threads to handle multiple requests. The server shown is an echo server, meaning that it echoes back any message it receives.
+
+While the example in Listing 2 isn't complicated it does anticipate some of what's coming up in the next section on NIO. Pay special attention to the amount of threading code we have to write in order to build a server that can handle multiple simultaneous requests.
+
+
+SponsoredPost Sponsored by Dell
+
+Why IT is finally going green
+
+Infrastructure needs greening now. Here’s how CIOs are stepping up.
+
+Listing 2. SimpleSocketServer.java
+package com.geekcap.javaworld.simplesocketclient;
+
+import java.io.BufferedReader;
+import java.io.I/OException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
+
+public class SimpleSocketServer extends Thread
+{
+    private ServerSocket serverSocket;
+    private int port;
+    private boolean running = false;
+
+    public SimpleSocketServer( int port )
+    {
+        this.port = port;
+    }
+
+    public void startServer()
+    {
+        try
+        {
+            serverSocket = new ServerSocket( port );
+            this.start();
+        }
+        catch (I/OException e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    public void stopServer()
+    {
+        running = false;
+        this.interrupt();
+    }
+
+    @Override
+    public void run()
+    {
+        running = true;
+        while( running )
+        {
+            try
+            {
+                System.out.println( "Listening for a connection" );
+
+                // Call accept() to receive the next connection
+                Socket socket = serverSocket.accept();
+
+                // Pass the socket to the RequestHandler thread for processing
+                RequestHandler requestHandler = new RequestHandler( socket );
+                requestHandler.start();
+            }
+            catch (I/OException e)
+            {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public static void main( String[] args )
+    {
+        if( args.length == 0 )
+        {
+            System.out.println( "Usage: SimpleSocketServer <port>" );
+            System.exit( 0 );
+        }
+        int port = Integer.parseInt( args[ 0 ] );
+        System.out.println( "Start server on port: " + port );
+
+        SimpleSocketServer server = new SimpleSocketServer( port );
+        server.startServer();
+
+        // Automatically shutdown in 1 minute
+        try
+        {
+            Thread.sleep( 60000 );
+        }
+        catch( Exception e )
+        {
+            e.printStackTrace();
+        }
+
+        server.stopServer();
+    }
+}
+
+class RequestHandler extends Thread
+{
+    private Socket socket;
+    RequestHandler( Socket socket )
+    {
+        this.socket = socket;
+    }
+
+    @Override
+    public void run()
+    {
+        try
+        {
+            System.out.println( "Received a connection" );
+
+            // Get input and output streams
+            BufferedReader in = new BufferedReader( new InputStreamReader( socket.getInputStream() ) );
+            PrintWriter out = new PrintWriter( socket.getOutputStream() );
+
+            // Write out our header to the client
+            out.println( "Echo Server 1.0" );
+            out.flush();
+
+            // Echo lines back to the client until the client closes the connection or we receive an empty line
+            String line = in.readLine();
+            while( line != null && line.length() > 0 )
+            {
+                out.println( "Echo: " + line );
+                out.flush();
+                line = in.readLine();
+            }
+
+            // Close our connection
+            in.close();
+            out.close();
+            socket.close();
+
+            System.out.println( "Connection closed" );
+        }
+        catch( Exception e )
+        {
+            e.printStackTrace();
+        }
+    }
+}
+Related: Java Core Java Software Development Learn Java Concurrency
+1 2 NEXT 
+ How to choose a low-code development platform
+InfoWorldFOLLOW US
+ABOUT USCONTACTREPUBLICATION PERMISSIONSPRIVACY POLICYCOOKIE POLICYMEMBER PREFERENCESADVERTISINGIDG CAREERSAD CHOICESE-COMMERCE LINKSCALIFORNIA: DO NOT SELL MY PERSONAL INFO
+Foundry logo
+Copyright © 2022 IDG Communications, Inc.
+
+Explore the Foundry Networkdescend
